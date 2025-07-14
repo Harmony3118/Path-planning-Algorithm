@@ -45,5 +45,8 @@
 *~
 .*.swp
 .vscode/
-.asv
-.mat
+*.asv
+*.mat
+
+# Fichiers dataset
+Dataset_SLAM/
