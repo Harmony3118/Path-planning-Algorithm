@@ -45,3 +45,5 @@
 *~
 .*.swp
 .vscode/
+.asv
+.mat
