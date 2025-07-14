@@ -40,3 +40,8 @@
 
 # debug information files
 *.dwo
+
+# Fichiers temporaires
+*~
+.*.swp
+.vscode/
