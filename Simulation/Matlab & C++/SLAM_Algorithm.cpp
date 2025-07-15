@@ -40,20 +40,9 @@ double calculateMaxRange(std::vector<Scan> scans)
     return max;
 }
 
-void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
-{ // nrhs :nb d'args, prhs: liste args, nlhs: nb sortis, plhs: liste sorties
-    if (nrhs != 1 || !mxIsChar(prhs[0]))
-    {
-        mexErrMsgTxt("Usage: SLAM_Algorithm('offlineSlamData.mat')");
-    }
-
-    char *filename = mxArrayToString(prhs[0]);
-    if (!filename)
-    {
-        mexErrMsgTxt("Could not read filename input.");
-    }
-
-    // Open MAT file
+std::vector<Scan> buildScansStructure(char *filename)
+{
+    // Open MAT file with reading
     MATFile *pmat = matOpen(filename, "r");
     if (!pmat)
     {
@@ -119,33 +108,75 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
 
     matClose(pmat);
-    mxFree(filename);
+    return scans;
+}
 
-    for (int i = 0; i < 3; i++)
+void printfVectorScan(std::vector<Scan> scans)
+{
+    for (int i = 0; i < 1; i++)
     {
         Scan s = scans[i];
-        
+
+        mexPrintf("Ranges\n");
         for (int j = 0; j < 10; j++)
         {
-            mexPrintf("Ranges\n");
             mexPrintf("\t%f\n", s.ranges[j]);
-            mexPrintf("\t\t%.15f\n", s.ranges[j]);
-            mexPrintf("\t...\n");
+        }
+        mexPrintf("\t...\n");
 
-            mexPrintf("Angles\n");
+        mexPrintf("Angles\n");
+        for (int j = 0; j < 10; j++)
+        {
             mexPrintf("\t%f\n", s.angles[j]);
-            mexPrintf("\t...\n");
+        }
+        mexPrintf("\t...\n");
 
-            mexPrintf("Cartesian\n");
+        mexPrintf("Cartesian\n");
+        for (int j = 0; j < 10; j++)
+        {
             mexPrintf("\t%f, %f\n", s.cartesian[j][0], s.cartesian[j][1]);
-            mexPrintf("\t...\n");
+        }
+        mexPrintf("\t...\n");
 
-            mexPrintf("Count\n\t%d\n", s.count);
+        mexPrintf("Count\n\t%d\n", s.count);
 
-            mexPrintf("Pose\n");
+        mexPrintf("Pose\n");
+        for (int j = 0; j < 3; j++)
+        {
             mexPrintf("\t%f\n", s.pose[j]);
         }
     }
+}
+
+// Complexity : n
+// Fonction called for each scan : worst case = O(n²)
+bool isLoopClosure(std::vector<Scan> scans, Scan currentScan) {
+    for(auto s : scans) {
+        if (s.pose == currentScan.pose) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
+{ // nrhs :nb d'args, prhs: liste args, nlhs: nb sortis, plhs: liste sorties
+    if (nrhs != 1 || !mxIsChar(prhs[0]))
+    {
+        mexErrMsgTxt("Usage: SLAM_Algorithm('offlineSlamData.mat')");
+    }
+
+    char *filename = mxArrayToString(prhs[0]);
+    if (!filename)
+    {
+        mexErrMsgTxt("Could not read filename input.");
+    }
+
+    std::vector<Scan> scans = buildScansStructure(filename);
+
+    mxFree(filename);
+
+    printfVectorScan(scans);
 
     double maxRangeAll = calculateMaxRange(scans);
     double maxLidarRange = maxRangeAll * 0.90;
