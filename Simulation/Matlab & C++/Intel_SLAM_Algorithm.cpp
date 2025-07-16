@@ -11,7 +11,7 @@
 #include <string>
 #include <algorithm>
 
-// #include <Eigen>
+#include <Eigen/Dense>
 
 struct Scan
 {
@@ -24,20 +24,16 @@ struct Scan
 
 struct Node
 {
-    double x;
-    double y;
-    double theta;
+    int id;
+    Eigen::Vector3d pose; // [x, y, θ]
 };
 
-struct Edge {
+struct Edge
+{
     int from;
     int to;
-    std::array<double, 3> measurement; // dx, dy, dtheta
-    Eigen::Matrix3d information;
-};
-
-struct PoseGraph
-{
+    Eigen::Vector3d relativePose; // dx, dy, dtheta
+    Eigen::Matrix3d omega;
 };
 
 double calculateMaxRange(std::vector<Scan> scans)
@@ -54,6 +50,16 @@ double calculateMaxRange(std::vector<Scan> scans)
         // mexPrintf("max actuel : %f\n", max);
     }
     return max;
+}
+
+double normalizeAngle(double angle)
+{
+    double tmp = fmod(fmod(angle, 2.0 * M_PI) + 2.0 * M_PI, 2.0 * M_PI);
+    if (tmp > M_PI)
+    {
+        tmp -= 2.0 * M_PI;
+    }
+    return tmp;
 }
 
 std::vector<Scan> buildScansStructure(char *filename)
@@ -164,6 +170,52 @@ void printfVectorScan(std::vector<Scan> scans)
     }
 }
 
+Eigen::Vector3d computeRelativeTransform(const Eigen::Vector3d &Ti, const Eigen::Vector3d &Tj)
+{
+    double dx = Tj.x() - Ti.x();
+    double dy = Tj.y() - Ti.y();
+    double dtheta = Tj.z() - Ti.z();
+
+    double cos_theta = cos(-Ti.z());
+    double sin_theta = sin(-Ti.z());
+
+    double x_rel = cos_theta * dx - sin_theta * dy;
+    double y_rel = sin_theta * dx + cos_theta * dy;
+
+    return Eigen::Vector3d(x_rel, y_rel, normalizeAngle(dtheta));
+}
+
+void createNodeAndEdge(const std::vector<Scan> &scans, std::vector<Node> &nodes, std::vector<Edge> &edges)
+{
+    for (size_t i = 0; i < scans.size(); i++)
+    {
+        Node node;
+        node.id = i;
+        node.pose = Eigen::Vector3d(scans[i].pose[0], scans[i].pose[1], scans[i].pose[2]);
+        nodes.push_back(node);
+
+        if (i > 0)
+        {
+            const auto &T_i = nodes[i - 1].pose;
+            const auto &T_j = nodes[i].pose;
+
+            Eigen::Vector3d T_ij = computeRelativeTransform(T_i, T_j);
+
+            Edge edge;
+            edge.from = i - 1;
+            edge.to = i;
+            edge.relativePose = T_ij;
+            // a faire : améliorer avec les mesures d'odometrie (tv, rv, accel)
+            // et des timestamps
+            Eigen::Matrix3d covariance;
+            covariance << 0.01, 0, 0,
+                0, 0.01, 0,
+                0, 0, 0.05;
+            edge.omega = covariance.inverse(); // matrice incertitude = Inverse de la covariance
+            edges.push_back(edge);
+        }
+    }
+}
 // Complexity : n
 // Fonction called for each scan : worst case = O(n²)
 bool isLoopClosure(std::vector<Scan> scans, Scan currentScan)
@@ -191,6 +243,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgTxt("Could not read filename input.");
     }
 
+    mexPrintf("Construction scan\n");
     std::vector<Scan> scans = buildScansStructure(filename);
 
     mxFree(filename);
@@ -202,10 +255,18 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double mapResolution = 20; // cell per meter
 
     // find loop closure
-    std::vector<Node> path;
-    std::vector<Edge>
+    // Pose node and constraint edges creation
+    std::vector<Node> nodes;
+    std::vector<Edge> edges;
 
-    //    slamAlgo();
+    mexPrintf("Construction noeuds et aretes");
+    createNodeAndEdge(scans, nodes, edges);
+
+    for (int i = 0; i < 3; i++)
+    {
+        mexPrintf("node:\n\tid: %d\n\tpose: %f %f %f\n", nodes[i].id, nodes[i].pose.x(), nodes[i].pose.y(), nodes[i].pose.z());
+        mexPrintf("Edge:\n\tfrom: %d\n\tyo: %d\n", edges[i].from, edges[i].to);
+    }
 
     // algo
 }

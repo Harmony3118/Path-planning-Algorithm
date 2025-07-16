@@ -1,4 +1,4 @@
-function scanStruct = parseIntelLogFile(logfile)
+function scanStruct = Intel_parseLogFile(logfile)
     
     fid = fopen(logfile, 'r');
     if fid == -1
@@ -57,5 +57,3 @@ function scanStruct = parseIntelLogFile(logfile)
     save('intelSlamData.mat', 'scanStruct');
     clear all;
 end
-
-parseIntelLogFile('../Dataset_SLAM/intel.log');
