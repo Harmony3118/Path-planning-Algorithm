@@ -11,6 +11,8 @@
 #include <string>
 #include <algorithm>
 
+// #include <Eigen>
+
 struct Scan
 {
     std::vector<double> ranges;
@@ -18,6 +20,20 @@ struct Scan
     std::vector<std::vector<double>> cartesian;
     int count;
     std::array<double, 3> pose; // [x, y, theta]
+};
+
+struct Node
+{
+    double x;
+    double y;
+    double theta;
+};
+
+struct Edge {
+    int from;
+    int to;
+    std::array<double, 3> measurement; // dx, dy, dtheta
+    Eigen::Matrix3d information;
 };
 
 struct PoseGraph
@@ -150,9 +166,12 @@ void printfVectorScan(std::vector<Scan> scans)
 
 // Complexity : n
 // Fonction called for each scan : worst case = O(n²)
-bool isLoopClosure(std::vector<Scan> scans, Scan currentScan) {
-    for(auto s : scans) {
-        if (s.pose == currentScan.pose) {
+bool isLoopClosure(std::vector<Scan> scans, Scan currentScan)
+{
+    for (auto s : scans)
+    {
+        if (s.pose == currentScan.pose)
+        {
             return true;
         }
     }
@@ -183,6 +202,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double mapResolution = 20; // cell per meter
 
     // find loop closure
+    std::vector<Node> path;
+    std::vector<Edge>
 
     //    slamAlgo();
 
