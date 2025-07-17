@@ -13,6 +13,14 @@
 
 #include <Eigen/Dense>
 
+#include <g2o/core/sparse_optimizer.h>
+#include <g2o/core/block_solver.h>
+#include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/solvers/cholmod/linear_solver_cholmod.h>
+#include <g2o/types/slam2d/types_slam2d.h>
+
+// libg2o_core, libg2o_types_slam2d, libg2o_solver_dense
+
 struct Scan
 {
     std::vector<double> ranges;
@@ -216,18 +224,82 @@ void createNodeAndEdge(const std::vector<Scan> &scans, std::vector<Node> &nodes,
         }
     }
 }
-// Complexity : n
-// Fonction called for each scan : worst case = O(n²)
-bool isLoopClosure(std::vector<Scan> scans, Scan currentScan)
+
+void graphOptimisation(std::vector<Node> &nodes, const std::vector<Edge> &edges)
 {
-    for (auto s : scans)
+    g2o::SparseOptimizer optimizer;
+    optimizer.setVerbose(true);
+
+    // Create a linear solver
+    auto linearSolver = std::make_unique<g2o::LinearSolverCholmod<g2o::BlockSolverX::PoseMatrixType>>();
+    auto solver_ptr = new g2o::OptimizationAlgorithmLevenberg(
+        std::make_unique<g2o::BlockSolverX>(std::move(linearSolver)));
+    optimizer.setAlgorithm(solver_ptr);
+
+    mexPrintf("\tLinear solver created\n");
+
+    // Add nodes
+    for (const auto &node : nodes)
     {
-        if (s.pose == currentScan.pose)
+        auto *v = new g2o::VertexSE2();
+        v->setId(node.id);
+        v->setEstimate(g2o::SE2(node.pose.x(), node.pose.y(), node.pose.z()));
+        if (node.id == 0)
         {
-            return true;
+            v->setFixed(true); // Fix the first node
         }
+        optimizer.addVertex(v);
     }
-    return false;
+
+    mexPrintf("\tNodes added\n");
+
+    // Add edges
+    for (const auto &edge : edges)
+    {
+        auto *e = new g2o::EdgeSE2();
+        e->setVertex(0, optimizer.vertex(edge.from));
+        e->setVertex(1, optimizer.vertex(edge.to));
+        e->setMeasurement(g2o::SE2(edge.relativePose[0], edge.relativePose[1], edge.relativePose[2]));
+        e->setInformation(edge.omega); // Set the information
+        optimizer.addEdge(e);
+    }
+
+    mexPrintf("\tEdges added\n");
+
+    // Debug: Print initial node poses
+    for (size_t i = 0; i < nodes.size(); i++)
+    {
+        auto *v = dynamic_cast<g2o::VertexSE2 *>(optimizer.vertex(i));
+        g2o::SE2 estimate = v->estimate();
+        mexPrintf("\tInitial node %zu pose: (%f, %f, %f)\n", i, estimate.translation()[0], estimate.translation()[1], estimate.rotation().angle());
+    }
+
+    // Optimisation
+    optimizer.initializeOptimization();
+    optimizer.optimize(10);
+
+    mexPrintf("\tOptimization done\n");
+
+    // // Debug: Print optimized node poses
+    // for (size_t i = 0; i < nodes.size(); i++)
+    // {
+    //     auto *v = dynamic_cast<g2o::VertexSE2 *>(optimizer.vertex(i));
+    //     g2o::SE2 estimate = v->estimate();
+    //     mexPrintf("\tOptimized node %zu pose: (%f, %f, %f)\n", i, estimate.translation()[0], estimate.translation()[1], estimate.rotation().angle());
+    // }
+
+    // Update node poses
+    for (size_t i = 0; i < nodes.size(); i++)
+    {
+        auto *v = dynamic_cast<g2o::VertexSE2 *>(optimizer.vertex(i));
+        g2o::SE2 estimate = v->estimate();
+        nodes[i].pose = Eigen::Vector3d(estimate.translation()[0], estimate.translation()[1], estimate.rotation().angle());
+    }
+
+    mexPrintf("\tNode poses updated\n");
+
+    optimizer.clear();
+    optimizer.setAlgorithm(nullptr);
 }
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
@@ -243,12 +315,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         mexErrMsgTxt("Could not read filename input.");
     }
 
-    mexPrintf("Construction scan\n");
     std::vector<Scan> scans = buildScansStructure(filename);
+    mexPrintf("Construction scan done\n");
 
     mxFree(filename);
 
-    printfVectorScan(scans);
+    // printfVectorScan(scans);
 
     double maxRangeAll = calculateMaxRange(scans);
     double maxLidarRange = maxRangeAll * 0.90;
@@ -259,14 +331,31 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     std::vector<Node> nodes;
     std::vector<Edge> edges;
 
-    mexPrintf("Construction noeuds et aretes");
     createNodeAndEdge(scans, nodes, edges);
+    mexPrintf("Construction noeuds et aretes done\n\n");
 
-    for (int i = 0; i < 3; i++)
+    // Retour 1 vers matlab
+    plhs[0] = mxCreateDoubleMatrix(nodes.size(), 3, mxREAL);
+    double *poseData = mxGetPr(plhs[0]);
+
+    for (size_t i = 0; i < nodes.size(); i++)
     {
-        mexPrintf("node:\n\tid: %d\n\tpose: %f %f %f\n", nodes[i].id, nodes[i].pose.x(), nodes[i].pose.y(), nodes[i].pose.z());
-        mexPrintf("Edge:\n\tfrom: %d\n\tyo: %d\n", edges[i].from, edges[i].to);
+        poseData[i] = nodes[i].pose[0];                    // x
+        poseData[i + nodes.size()] = nodes[i].pose[1];     // y
+        poseData[i + 2 * nodes.size()] = nodes[i].pose[2]; // theta
     }
 
-    // algo
+    graphOptimisation(nodes, edges);
+    mexPrintf("Optimisation done\n");
+
+    // Retour 2 vers matlab
+    plhs[1] = mxCreateDoubleMatrix(nodes.size(), 3, mxREAL);
+    double *poseData2 = mxGetPr(plhs[1]);
+
+    for (size_t i = 0; i < nodes.size(); i++)
+    {
+        poseData2[i] = nodes[i].pose[0];                    // x
+        poseData2[i + nodes.size()] = nodes[i].pose[1];     // y
+        poseData2[i + 2 * nodes.size()] = nodes[i].pose[2]; // theta
+    }
 }
