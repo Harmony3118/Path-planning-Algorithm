@@ -2,8 +2,6 @@
 // Compilation: g++ -Astar_Algorithm.cpp -o Astar_Algorithm
 // Compilation mex: mex myAStar.cpp
 
-// il faut tester la compilation automatique
-
 #include <math.h>
 #include "mex.h"
 
@@ -62,8 +60,7 @@ struct AStartResult
 };
 
 // angle compris entre [-pi; pi]
-double
-wrapToPi(double theta)
+double wrapToPi(double theta)
 {
     if (theta < -M_PI)
     {
@@ -98,9 +95,8 @@ double heuristic(const State &state, const State &goal)
     return std::hypot(dx, dy) + abs(dtheta) * 0.05;
 }
 
-std::vector<State> getNeighbors(const State &state, double *map, mwSize rows, mwSize cols)
+std::vector<State> getNeighbors(const State &state, double *map, mwSize rows, mwSize cols, int cellPerMeter)
 {
-    int cellPerMeter = 10;
     double d = 1.0 / cellPerMeter;
     double dtheta = M_PI / 2;
 
@@ -140,7 +136,7 @@ bool goalReach(const State &state, const State &goal)
     return heuristic(state, goal) < 0.1;
 }
 
-AStartResult AStar(const State &start, const State &goal, double *map, mwSize rows, mwSize cols)
+AStartResult AStar(const State &start, const State &goal, double *map, mwSize rows, mwSize cols, int cellPerMeter)
 {
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> openList;
     std::unordered_map<State, double> gCost;   // dictionnaire key = state, data = cost
@@ -172,7 +168,7 @@ AStartResult AStar(const State &start, const State &goal, double *map, mwSize ro
             return {path, exploredStates};
         }
 
-        std::vector<State> neighbors = getNeighbors(current.state, map, rows, cols);
+        std::vector<State> neighbors = getNeighbors(current.state, map, rows, cols, cellPerMeter);
         for (const State &neighbor : neighbors)
         {
             double dtheta = 0.05 * std::abs(wrapToPi(current.state.theta - neighbor.theta));
@@ -194,10 +190,9 @@ AStartResult AStar(const State &start, const State &goal, double *map, mwSize ro
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    // a faire : adapter en fonction du nombre de cellule par metre
-    if (nrhs != 3)
+    if (nrhs != 4)
     {
-        mexErrMsgTxt("Usage: path = Astar_Algorithm_v2(start, goal, map)");
+        mexErrMsgTxt("Usage: path = Astar_Algorithm_v2(start, goal, map, cellPerMeter)");
     }
     double *startTmp = mxGetPr(prhs[0]);
     double *goalTmp = mxGetPr(prhs[1]);
@@ -210,6 +205,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     mwSize rows = mxGetM(map);
     mwSize cols = mxGetN(map);
 
+    int cellPerMeter = static_cast<int>(mxGetPr(prhs[3])[0]);
+
     // for (int j = 0; j < rows; j++) // ligne en haut dans le code c++ mais en bas dans matlab
     // {
     //     for (int i = 0; i < cols; i++)
@@ -219,11 +216,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     //     mexPrintf("|\n");
     // }
 
-    auto [path, explored] = AStar(start, goal, mapData, rows, cols);
+    auto [path, explored] = AStar(start, goal, mapData, rows, cols, cellPerMeter);
 
     mwSize dims[3] = {path.size(), 3};
     plhs[0] = mxCreateDoubleMatrix(path.size(), 3, mxREAL);
-    // plhs[0] = mxCreateNumericArray(3, dims, mxDOUBLE_CLASS, mxREAL);
     double *out = mxGetPr(plhs[0]);
 
     for (size_t i = 0; i < path.size(); i++)
@@ -237,8 +233,6 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     {
         mwSize dimsExplored[3] = {explored.size(), 3};
         plhs[1] = mxCreateDoubleMatrix(explored.size(), 3, mxREAL);
-        // plhs[1] = mxCreateDoubleMatrix(dimsExplored[0], dimsExplored[1], dimsExplored[2], mxREAL);
-        // plhs[1] = mxCreateNumericArray(3, dimsExplored, mxDOUBLE_CLASS, mxREAL);
         double *outExplored = mxGetPr(plhs[1]);
 
         for (size_t i = 0; i < explored.size(); ++i)

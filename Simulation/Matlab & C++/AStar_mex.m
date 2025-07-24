@@ -16,7 +16,7 @@ map = occupancyMap(simpleMap, cellPerMeter);
 
 mapMatrix = occupancyMatrix(map); 
 
-[path, explored] = Astar_Algorithm_v2(start, goal, mapMatrix);
+[path, explored] = Astar_Algorithm_v2(start, goal, mapMatrix, cellPerMeter);
 
 afficher_planification(map, path, explored, start, goal);
 
