@@ -131,9 +131,9 @@ std::vector<State> getNeighbors(const State &state, double *map, mwSize rows, mw
     return validNeighbors;
 }
 
-bool goalReach(const State &state, const State &goal)
+bool goalReach(const State &state, const State &goal, int cellPerMeter)
 {
-    return heuristic(state, goal) < 0.1;
+    return heuristic(state, goal) < 1 / cellPerMeter;
 }
 
 AStartResult AStar(const State &start, const State &goal, double *map, mwSize rows, mwSize cols, int cellPerMeter)
@@ -153,7 +153,7 @@ AStartResult AStar(const State &start, const State &goal, double *map, mwSize ro
 
         exploredStates.push_back(current.state);
 
-        if (goalReach(current.state, goal))
+        if (goalReach(current.state, goal, cellPerMeter))
         {
             std::vector<State> path;
             State s = current.state;
