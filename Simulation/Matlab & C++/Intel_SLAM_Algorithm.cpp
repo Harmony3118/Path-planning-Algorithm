@@ -1,6 +1,3 @@
-// g++ -std=c++17 -I$MATLAB_ROOT/extern/include -L$MATLAB_ROOT/bin/glnxa64 -lmat -lmx read_slam.cpp -o read_slam
-// replace $MATLAB_ROOT by matlab install path
-
 #include "mex.h"
 #include "mat.h"
 #include "matrix.h"
@@ -10,6 +7,7 @@
 #include <array>
 #include <string>
 #include <algorithm>
+#include <cstdio>
 
 #include <Eigen/Dense>
 
@@ -19,7 +17,12 @@
 #include <g2o/solvers/cholmod/linear_solver_cholmod.h>
 #include <g2o/types/slam2d/types_slam2d.h>
 
+#include <pointmatcher/PointMatcher.h>
+
 // libg2o_core, libg2o_types_slam2d, libg2o_solver_dense
+
+typedef PointMatcher<float> PM;
+// typedef PM::DataPoints DP;
 
 struct Scan
 {
@@ -28,6 +31,8 @@ struct Scan
     std::vector<std::vector<double>> cartesian;
     int count;
     std::array<double, 3> pose; // [x, y, theta]
+
+    PM::DataPoints pointCloud;
 };
 
 struct Node
@@ -119,13 +124,31 @@ std::vector<Scan> buildScansStructure(char *filename)
         double *pc = mxGetPr(mx_cartesian);
         size_t rows = mxGetM(mx_cartesian);
         size_t cols = mxGetN(mx_cartesian);
+        // a faire : s.cartesian n'est pas vraiment utile
         s.cartesian.resize(rows, std::vector<double>(cols));
         for (size_t r = 0; r < rows; r++)
         {
             for (size_t c = 0; c < cols; c++)
             {
+                // mexPrintf("r: %zu, c: %zu, value: %f\n", r, c, pc[r + c * rows]);
                 s.cartesian[r][c] = pc[r + c * rows];
             }
+        }
+        using Label = typename PM::DataPoints::Label;
+        Eigen::MatrixXf features(3, rows); // 3 lignes : x, y, 1 (homogène)
+
+        for (size_t i = 0; i < rows; i++)
+        {
+            features(0, i) = static_cast<float>(s.cartesian[i][0]);
+            features(1, i) = static_cast<float>(s.cartesian[i][1]);
+            features(2, i) = 1.0f;
+
+            // std::vector<std::string> labelNames = {"x", "y", "pad"};
+            // s.pointCloud = PM::DataPoints(features, PM::DataPoints::Labels(labelNames));
+            s.pointCloud.features = features;
+            s.pointCloud.featureLabels.push_back(Label("x", 1));
+            s.pointCloud.featureLabels.push_back(Label("y", 1));
+            s.pointCloud.featureLabels.push_back(Label("pad", 1));
         }
 
         s.count = static_cast<int>(mxGetScalar(mx_count));
@@ -225,10 +248,78 @@ void createNodeAndEdge(const std::vector<Scan> &scans, std::vector<Node> &nodes,
     }
 }
 
+void addLoopClosures(const std::vector<Node> &nodes, const std::vector<Scan> &scans, std::vector<Edge> &edges, double proximityThreshold = 1.0, int minSeparation = 200)
+{
+    PM::ICP icp;
+    icp.setDefault();
+
+    FILE *fp = fopen("result.txt", "w");
+    if (!fp)
+    {
+        mexErrMsgTxt("Cannot open result.txt for writing.");
+    }
+
+    mexPrintf("ICP initialized\n");
+
+    for (size_t i = 0; i < scans.size(); ++i)
+    {
+        mexPrintf("Processing scan %zu\n", i);
+        for (size_t j = 0; j + minSeparation < i; ++j)
+        {
+            const auto &ref = scans[j].pointCloud;
+            const auto &reading = scans[i].pointCloud;
+
+            PM::TransformationParameters T = icp(reading, ref);
+
+            // Compute fitness (mean error)
+            double error = icp.errorMinimizer->getWeightedPointUsedRatio();
+
+            // You may want to use icp.errorMinimizer->getResidualError() or similar for a threshold
+            if (error <= 0.5) // Threshold to tune (lower = more strict)
+            {
+
+                // Extract relative pose from T (3x3 matrix for 2D)
+                double dx = T(0, 2);
+                double dy = T(1, 2);
+                double dtheta = atan2(T(1, 0), T(0, 0));
+
+                // // Only add if translation is small (optional, for robustness)
+                // if (std::sqrt(dx * dx + dy * dy) <= proximityThreshold)
+                // {
+                Edge edge;
+                edge.from = j;
+                edge.to = i;
+                edge.relativePose = Eigen::Vector3d(dx, dy, dtheta);
+
+                Eigen::Matrix3d covariance;
+                covariance << 0.05, 0, 0,
+                    0, 0.05, 0,
+                    0, 0, 0.1;
+                edge.omega = covariance.inverse();
+
+                edges.push_back(edge);
+
+                fprintf(fp, "Added from %zu to %zu\n", j, i);
+                // }
+                // else
+                // {
+                //     fprintf(fp, "Rejected from %zu to %zu, translation too large: %f\n", j, i, std::sqrt(dx * dx + dy * dy));
+                // }
+            }
+            // else
+            // {
+            //     fprintf(fp, "Rejected from %zu to %zu, error: %f\n", j, i, error);
+            // }
+        }
+        fprintf(fp, "%zu done\n", i);
+    }
+    fclose(fp);
+}
+
 void graphOptimisation(std::vector<Node> &nodes, const std::vector<Edge> &edges)
 {
     g2o::SparseOptimizer optimizer;
-    optimizer.setVerbose(true);
+    optimizer.setVerbose(false);
 
     // Create a linear solver
     auto linearSolver = std::make_unique<g2o::LinearSolverCholmod<g2o::BlockSolverX::PoseMatrixType>>();
@@ -270,6 +361,10 @@ void graphOptimisation(std::vector<Node> &nodes, const std::vector<Edge> &edges)
     for (size_t i = 0; i < nodes.size(); i++)
     {
         auto *v = dynamic_cast<g2o::VertexSE2 *>(optimizer.vertex(i));
+        if (!v)
+        {
+            mexErrMsgTxt("Erreur : vertex nul pendant lecture du graphe.");
+        }
         g2o::SE2 estimate = v->estimate();
         mexPrintf("\tInitial node %zu pose: (%f, %f, %f)\n", i, estimate.translation()[0], estimate.translation()[1], estimate.rotation().angle());
     }
@@ -322,17 +417,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 
     // printfVectorScan(scans);
 
-    double maxRangeAll = calculateMaxRange(scans);
-    double maxLidarRange = maxRangeAll * 0.90;
-    double mapResolution = 20; // cell per meter
+    // double maxRangeAll = calculateMaxRange(scans);
+    // double maxLidarRange = maxRangeAll * 0.90;
+    // double mapResolution = 20; // cell per meter
 
-    // find loop closure
-    // Pose node and constraint edges creation
+    // // Pose node and constraint edges creation
     std::vector<Node> nodes;
     std::vector<Edge> edges;
 
     createNodeAndEdge(scans, nodes, edges);
     mexPrintf("Construction noeuds et aretes done\n\n");
+
+    addLoopClosures(nodes, scans, edges);
+    mexPrintf("Loop closures ajoutés\n");
 
     // Retour 1 vers matlab
     plhs[0] = mxCreateDoubleMatrix(nodes.size(), 3, mxREAL);
@@ -345,8 +442,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         poseData[i + 2 * nodes.size()] = nodes[i].pose[2]; // theta
     }
 
-    graphOptimisation(nodes, edges);
-    mexPrintf("Optimisation done\n");
+    // graphOptimisation(nodes, edges);
+    // mexPrintf("Optimisation done\n");
 
     // Retour 2 vers matlab
     plhs[1] = mxCreateDoubleMatrix(nodes.size(), 3, mxREAL);

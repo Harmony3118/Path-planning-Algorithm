@@ -51,7 +51,7 @@ function scanStruct = Intel_parseLogFile(logfile)
             scanIdx = scanIdx + 1;
         end
     end
-
+    
     fclose(fid);
 
     save('intelSlamData.mat', 'scanStruct');
