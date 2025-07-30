@@ -11,8 +11,8 @@ sv.ValidationDistance = 0.01; % validator chek all 0.01 meters states
 ss.StateBounds = [map.XWorldLimits; map.YWorldLimits; [-pi pi]];
 
 planner = plannerRRT(ss, sv, MaxConnectionDistance=0.3);
-start = [0.2 0.5 0];
-goal = [0.9 0.5 0];
+start = [1.1 2.2 0];
+goal = [2.5 0.2 0];
 
 rng('shuffle'); % random initialize by time machine
 [pthObj,solnInfo] = plan(planner, start, goal);

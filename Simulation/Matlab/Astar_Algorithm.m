@@ -13,8 +13,9 @@ sv.Map = map;
 sv.ValidationDistance = 0.05; % ??
 ss.StateBounds = [map.XWorldLimits; map.YWorldLimits; [-pi pi]];
 
-start = [0.2 0 0];
-goal = [0.9 0.4 0];
+start = [1.1 2.2 0];
+goal = [1.5 0.2 0];
+% goal = [2.5 0.2 0];
 
 function h = heuristicSE2(state, goal)
     dx = state(1) - goal(1);
@@ -100,7 +101,12 @@ end
 figure;
 show(map);
 hold on;
+if ~isempty(closeList)
+    exploredStates = reshape([closeList.State], 3, [])';
+    plot(exploredStates(:,1), exploredStates(:,2), 'bo', 'MarkerSize', 3);
+end
 plot(path(:,1), path(:,2), 'r-', 'LineWidth', 2);
+title("A* algorithm")
 
 
 % 
