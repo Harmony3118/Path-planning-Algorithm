@@ -6,10 +6,23 @@ function afficher_planification(map, path, explored, start, goal)
     hold on;
 
     % === 1. Affichage des états explorés avec orientation ===
+    % if ~isempty(explored)
+    %     quiver(explored(:,1), explored(:,2), ...
+    %            cos(explored(:,3)), sin(explored(:,3)), ...
+    %            0.3, 'Color', [0.3 0.6 1], 'MaxHeadSize', 2);
+    % end
+
+    % === 1. Affichage des états explorés reliés à leur parent ===
     if ~isempty(explored)
-        quiver(explored(:,1), explored(:,2), ...
-               cos(explored(:,3)), sin(explored(:,3)), ...
-               0.3, 'Color', [0.3 0.6 1], 'MaxHeadSize', 2);
+        for i = 1:size(explored,1)
+            % Trace une ligne de chaque parent à chaque enfant
+            plot([explored(i,1), explored(i,4)], [explored(i,2), explored(i,5)], ...
+                 'Color', [0.3 0.6 1], 'LineWidth', 1);
+        end
+        % Optionnel : afficher les orientations des enfants
+        % quiver(explored(:,1), explored(:,2), ...
+        %        cos(explored(:,3)), sin(explored(:,3)), ...
+        %        0.3, 'Color', [0.3 0.6 1], 'MaxHeadSize', 2);
     end
 
     % === 2. Affichage du chemin suivi ===
