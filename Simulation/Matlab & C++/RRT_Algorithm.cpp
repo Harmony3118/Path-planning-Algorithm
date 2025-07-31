@@ -8,7 +8,12 @@
 #include <array>
 #include <algorithm>
 
-// a faire : définir struct pour la map histoire de ne pas avoir à passer en argument ligne, colonne et carte à chaque fois
+struct Map
+{
+    double *data;
+    int rows;
+    int cols;
+};
 
 struct State
 {
@@ -133,17 +138,17 @@ struct RRTResult
     std::unordered_map<State, State> RRTTreeParent;
 };
 
-State pickRandomPoint(const int &rows, const int &cols, const double *&map)
+State pickRandomPoint(const Map &map)
 {
     State newState;
     bool isWall = true;
     while (isWall)
     {
-        newState.x = getCoordonnate(0, cols);
+        newState.x = getCoordonnate(0, map.cols);
 
-        newState.y = getCoordonnate(0, rows);
+        newState.y = getCoordonnate(0, map.rows);
         newState.theta = getCoordonnate(-M_PI, M_PI);
-        isWall = static_cast<int>(round(map[newState.y + newState.x * rows])) == 1;
+        isWall = static_cast<int>(round(map.data[newState.y + newState.x * map.rows])) == 1;
     }
     return newState;
 }
@@ -164,8 +169,7 @@ State getNearestState(const State &randState, ABR2dimNode *&T, int depth = 0)
 {
     if (T == nullptr)
     {
-        return {3000, 3000, 3000}; // return problème
-        // a faire : gérer le retour null
+        return {3000, 3000, 3000}; // return vide toujours plus grand que le reste
     }
 
     if ((depth == 0 && randState.x < T->state.x) ||
@@ -227,7 +231,7 @@ State steer(const State &randState, const State &nearestState, double stepSize)
     }
 }
 
-bool isCollisionFree(const State &a, const State &b, const double *&map, const int &rows, const int &cols)
+bool isCollisionFree(const State &a, const State &b, const Map &map)
 {
     int steps = static_cast<int>(std::hypot(b.x - a.x, b.y - a.y));
     for (int i = 0; i <= steps; ++i)
@@ -235,34 +239,32 @@ bool isCollisionFree(const State &a, const State &b, const double *&map, const i
         double t = steps == 0 ? 0.0 : static_cast<double>(i) / steps;
         int x = static_cast<int>(std::round(a.x + t * (b.x - a.x)));
         int y_tmp = static_cast<int>(std::round(a.y + t * (b.y - a.y)));
-        int y = rows - 1 - y_tmp;
+        int y = map.rows - 1 - y_tmp;
 
-        if (x < 0 || x >= cols || y < 0 || y >= rows)
+        if (x < 0 || x >= map.cols || y < 0 || y >= map.rows)
             return false;
-        if (map[y + x * rows] > 0.5)
+        if (map.data[y + x * map.rows] > 0.5)
             return false;
     }
     return true;
 }
 
-RRTResult RRT(const State &start, const State &goal, const double *&map, int rows, int cols, double stepSize)
+RRTResult RRT(const State &start, const State &goal, const Map &map, double stepSize)
 {
     RRTResult result;
     State randState, nearestState, newState;
 
     // init ABR-2 T
     ABR2dimTree T(start);
-    // a faire : supprimer T à la fin de l'algo
 
-    // a faire : iterations en argument par l'utilisateur
     int iterations = 10000;
     for (int i = 0; i < iterations; i++)
     {
-        randState = pickRandomPoint(rows, cols, map);
+        randState = pickRandomPoint(map);
         nearestState = getNearestState(randState, T.root);
         newState = steer(randState, nearestState, stepSize);
 
-        if (isCollisionFree(nearestState, newState, map, rows, cols))
+        if (isCollisionFree(nearestState, newState, map))
         {
             bool isNotDoublon = T.insertState(newState);
             if (isNotDoublon)
@@ -305,12 +307,13 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     State start = {static_cast<int>(startTmp[0] * cellPerMeter), static_cast<int>(startTmp[1] * cellPerMeter), startTmp[2]};
     State goal = {static_cast<int>(goalTmp[0] * cellPerMeter), static_cast<int>(goalTmp[1] * cellPerMeter), goalTmp[2]};
 
-    mxArray *map = (mxArray *)prhs[2];
-    const double *mapData = mxGetPr(map);
-    int rows = static_cast<int>(mxGetM(map));
-    int cols = static_cast<int>(mxGetN(map));
+    mxArray *mapArray = (mxArray *)prhs[2];
+    Map map;
+    map.data = mxGetPr(mapArray);
+    map.rows = static_cast<int>(mxGetM(mapArray));
+    map.cols = static_cast<int>(mxGetN(mapArray));
 
-    auto [path, explored] = RRT(start, goal, mapData, rows, cols, 10.0);
+    auto [path, explored] = RRT(start, goal, map, 10.0);
 
     mwSize dims[3] = {path.size(), 3};
     plhs[0] = mxCreateDoubleMatrix(path.size(), 3, mxREAL);
