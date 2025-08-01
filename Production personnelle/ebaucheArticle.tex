@@ -1,0 +1,40 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber,style=apa]{biblatex}
+
+\addbibresource{PathPlanning.bib}
+
+\title{Ebauche d'article about path planning algorithms}
+\author{Pauline Prost--Waterson}
+
+\begin{document}
+\maketitle
+\section{A* Algorithm}
+So I started with A* algorithm. Complexity is $O(b^d)$ where $b$ is the branching factor and $d$ is the depth of the solution.
+\section{RRT Algorithm and Improvement (RRT* ans Explored-RRT)}
+Complexity is $O(n \log n)$ where $n$ is the number of nodes in the tree. I used binary search tree to find the nearest node. Description of the algorithm + article source : \cite{RRTAlgorithmAndImprovement2024wu}.
+The exploration of the RRT tree is an uniform description. But with the Voronoi Bias lead the exploration to the blank space \cite{lindemannIncrementallyReducingDispersion2004}.
+To improve the path found, we use RRT* algorithms.
+
+An other improvement of RRT algorithm is Theta algorithms \cite{ThetaAlgorithm2010daniel}.
+
+The complexity of those alggorithms and more are describe in this document
+
+One of the issues faced at this point is the map needing for all those algorithms at the beginning of the execution.
+
+\section{SLAM Algorithm}
+SLAM algorithms is used to simultaniously locate the robot and mapping the environnement \cite{}. To simulate I used two different dataset MIT and Intel. But the algorithm execution is too costly.
+So I tried to improved the detection of loop closure by using histogram of part of the map not already build \cite{ExtractingStatisticalSignatures2022an}.
+
+\section{Path planning and mapping}
+Explored-RRT (ERRT) is an algorithm which plan a path but also map the environnement while moving \cite{ExplorationRRTMultiobjectivePath2021lindqvist}.
+
+There is other possible method like a fusion of improved A* algorithm and Morphin algorithm \cite{AStarAndMorphinAlgorithm2019yi} or improved Ant colony algorithm \cite{ImprovedAntColony2018wang}.
+
+\section{Future plan}
+Moving robot should also adapt to there environnement and the people norm. The AI-learning model of such learn are describe in this document \cite{TeachingRobotNavigation2018perez-higueras} in which it's describe that human beavihour (not the right word) are easier to show than to mathematical describe.
+
+\printbibliography
+\end{document}

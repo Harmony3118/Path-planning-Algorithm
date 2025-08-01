@@ -76,3 +76,5 @@ Simulation/Matlab & C++/pemier_result.txt
 *.idx
 *.run.xml
 *.bcf
+*-blx.bib
+Production\ personnelle/*.pdf
