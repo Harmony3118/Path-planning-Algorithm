@@ -51,3 +51,28 @@
 # Fichiers dataset
 Dataset_SLAM/
 Simulation/Matlab & C++/pemier_result.txt
+
+# Fichiers latex
+*.aux
+*.bbl
+*.blg
+*.log
+*.toc
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+*.dvi
+*.ps
+*.lof
+*.lot
+*.cb
+*.cb2
+*.ind
+*.ilg
+*.idx
+*.run.xml
+*.bcf
