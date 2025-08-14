@@ -41,6 +41,19 @@ namespace std
     };
 }
 
+void printState(State s, bool newLign, int decalage)
+{
+    for (int i = 0; i < decalage; i++)
+    {
+        mexPrintf("\t");
+    }
+    mexPrintf("%d %d %f\t", s.x, s.y, s.theta);
+    if (newLign)
+    {
+        mexPrintf("\n");
+    }
+}
+
 double distance(const State &s1, const State &s2)
 {
     int dx = s1.x - s2.x;
@@ -261,16 +274,28 @@ RRTResult RRT(const State &start, const State &goal, const Map &map, double step
     for (int i = 0; i < iterations; i++)
     {
         randState = pickRandomPoint(map);
+        printState(randState, false, 0);
         nearestState = getNearestState(randState, T.root);
+        printState(nearestState, false, 0);
         newState = steer(randState, nearestState, stepSize);
+        printState(newState, false, 0);
 
         if (isCollisionFree(nearestState, newState, map))
         {
             bool isNotDoublon = T.insertState(newState);
             if (isNotDoublon)
             {
+                printState(nearestState, true, 0);
                 result.RRTTreeParent[newState] = nearestState;
             }
+            else
+            {
+                mexPrintf("\n");
+            }
+        }
+        else
+        {
+            mexPrintf("\n");
         }
 
         if (goal == newState)

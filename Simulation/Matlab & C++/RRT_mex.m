@@ -1,21 +1,27 @@
 clc, close all, clear all
 
-cppFile = 'RRT_Algorithm.cpp';
-mexName = ['RRT_Algorithm.',mexext()];
+% cppFile = 'RRT_Algorithm.cpp';
+% mexName = ['RRT_Algorithm.',mexext()];
+cppFile = 'RRTstar_Algorithm.cpp';
+mexName = ['RRTstar_Algorithm.',mexext()];
 
 if ~isfile(mexName) || dir(cppFile).datenum > dir(mexName).datenum
     mex(cppFile);
 end
 
-start = [1.1 2.2 0];
-goal = [1.5 0.2 0];
+start = [2.5 3.5 0];
+goal = [2.5 0.2 0];
 
 load exampleMaps % emptyMap, simpleMap and complexMap
 cellPerMeter = 10;
-map = occupancyMap(simpleMap, cellPerMeter);
+map = occupancyMap(complexMap, cellPerMeter);
 
 mapMatrix = occupancyMatrix(map); 
 
-[path, explored] = RRT_Algorithm(start, goal, mapMatrix, cellPerMeter);
+disp(start);
+disp(goal);
+
+% [path, explored] = RRT_Algorithm(start, goal, mapMatrix, cellPerMeter);
+[path, explored] = RRTstar_Algorithm(start, goal, mapMatrix, cellPerMeter);
 
 afficher_planification(map, path, explored, start, goal);
